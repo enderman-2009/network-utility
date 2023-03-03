@@ -1,0 +1,68 @@
+local component = require("component")
+local event = require("event")
+local modem = component.modem
+
+local network = {}
+
+network.get = function(port, name, duration, sender)
+	if port == nil then
+		print("Usage:get(port[number], name[string], duration[number]optional, sender[address]optional)")
+		return
+	end
+	if modem.isOpen(port) then
+		return false
+	end
+	modem.open(port)
+	if duration == nil then
+		local duration = math.huge
+	end
+	local eType, eRec, eSen, ePor, eDis, eName, eValue = event.pull(duration, "modem_message", nil, sender, port, nil, name)
+	if eType ~= nil then
+		modem.send(eSen, port, name, value, "confirmation")
+	end
+	modem.close(port)
+	return eSen, eValue, eName
+end
+
+network.send = function(port, name, value, confirmation, receiver)
+	if port == nil then
+		print("Usage:send(port[number], name[string], value[string or number], confirmation[boolean]optional, receiver[address]optional)")
+		return
+	end
+	if modem.isOpen(port) then
+		return false
+	end
+	modem.open(port)
+	for i = 1, 16 do
+		if receiver == nil then
+			modem.broadcast(port, name, value)
+			if confirmation then
+				eType, eRec, eSen, ePor, eDis, eName, eValue = event.pull(1/16, "modem_message", _, _, port, _, _, _, "confirmation")
+				if eType ~= nil then
+					modem.close(port)
+					return eSen
+				end
+			end
+		else
+			modem.send(receiver, port, name, value)
+			if confirmation then
+				eType, eRec, eSen, ePor, eDis, eName, eValue = event.pull(1/16, "modem_message", _, receiver, port, _, _, _, "confirmation")
+				if eType ~= nil then
+					modem.close(port)
+					return eSen
+				end
+			end
+		end
+		if confirmation ~= true then
+			modem.close(port)
+			return false
+		end
+	end
+	if comfirmation then
+		return nil
+	end
+	modem.close(port)
+	return
+end
+
+return network
